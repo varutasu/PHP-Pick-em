@@ -18,7 +18,7 @@ function getCurrentWeek()
 		}
 		$query2->free;
 	}
-	$query->free;
+	$query->free_result();
 	die('Error getting current week: ' . $mysqli->error);
 }
 
@@ -47,7 +47,7 @@ function getCutoffDateTime($week)
 		$row = $query->fetch_assoc();
 		return $row['gameTimeEastern'];
 	}
-	$query->free;
+	$query->free_result();
 	die('Error getting cutoff date: ' . $mysqli->error);
 }
 
@@ -61,7 +61,7 @@ function getFirstGameTime($week)
 		$row = $query->fetch_assoc();
 		return $row['gameTimeEastern'];
 	}
-	$query->free;
+	$query->free_result();
 	die('Error getting first game time: ' . $mysqli->error);
 }
 
@@ -77,7 +77,7 @@ function getPickID($gameID, $userID)
 	} else {
 		return false;
 	}
-	$query->free;
+	$query->free_result();
 	die('Error getting pick id: ' . $mysqli->error);
 }
 
@@ -89,7 +89,8 @@ function getGameIDByTeamName($week, $teamName)
 	$sql .= "from " . DB_PREFIX . "schedule s ";
 	$sql .= "inner join " . DB_PREFIX . "teams t1 on s.homeID = t1.teamID ";
 	$sql .= "inner join " . DB_PREFIX . "teams t2 on s.visitorID = t2.teamID ";
-	$sql .= "where weekNum = " . $week;
+	$sql .= "WHERE yearNum = " . $year;	
+	$sql .= " and weekNum = " . $week;
 	$sql .= " and ((t1.city = '" . $teamName . "' or t1.displayName = '" . $teamName . "') or (t2.city = '" . $teamName . "' or t2.displayName = '" . $teamName . "'))";
 	$query = $mysqli->query($sql);
 	if ($query->num_rows > 0) {
@@ -98,7 +99,7 @@ function getGameIDByTeamName($week, $teamName)
 	} else {
 		return false;
 	}
-	$query->free;
+	$query->free_result();
 	die('Error getting game id: ' . $mysqli->error);
 }
 
@@ -120,7 +121,7 @@ function getGameIDByTeamID($week, $teamID)
 	} else {
 		return false;
 	}
-	$query->free;
+	$query->free_result();
 	die('Error getting game id: ' . $mysqli->error);
 }
 
@@ -137,7 +138,7 @@ function getUserPicks($week, $userID)
 	while ($row = $query->fetch_assoc()) {
 		$picks[$row['gameID']] = array('pickID' => $row['pickID'], 'points' => $row['points']);
 	}
-	$query->free;
+	$query->free_result();
 	return $picks;
 }
 
@@ -180,7 +181,7 @@ function getUserScore($week, $userID)
 			$games[$row['gameID']]['winnerID'] = $row['visitorID'];
 		}
 	}
-	$query->free;
+	$query->free_result();
 
 	//loop through player picks & calculate score
 	$sql = "select p.userID, p.gameID, p.pickID, p.points ";
@@ -196,7 +197,7 @@ function getUserScore($week, $userID)
 			$score++;
 		}
 	}
-	$query->free;
+	$query->free_result();
 
 	return $score;
 }
@@ -211,7 +212,7 @@ function getGameTotal($week)
 		$row = $query->fetch_assoc();
 		return $row['gameTotal'];
 	}
-	$query->free;
+	$query->free_result();
 	die('Error getting game total: ' . $mysqli->error);
 }
 
@@ -225,7 +226,7 @@ function gameIsLocked($gameID)
 		$row = $query->fetch_assoc();
 		return $row['expired'];
 	}
-	$query->free;
+	$query->free_result();
 	die('Error getting game locked status: ' . $mysqli->error);
 }
 
@@ -239,7 +240,7 @@ function hidePicks($userID, $week)
 		$row = $query->fetch_assoc();
 		return (($row['showPicks']) ? 0 : 1);
 	}
-	$query->free;
+	$query->free_result();
 	return 0;
 }
 
@@ -260,7 +261,7 @@ function getLastCompletedWeek()
 			$lastCompletedWeek = (int)$row['weekNum'];
 		}
 	}
-	$query->free;
+	$query->free_result();
 	return $lastCompletedWeek;
 }
 
@@ -287,7 +288,7 @@ function calculateStats()
 				$games[$row['gameID']]['winnerID'] = $row['visitorID'];
 			}
 		}
-		$query->free;
+		$query->free_result();
 
 		//get array of player picks
 		$playerPicks = array();
@@ -314,7 +315,7 @@ function calculateStats()
 				$playerTotals[$row['userID']][score] += 0;
 			}
 		}
-		$query->free;
+		$query->free_result();
 
 		//get winners & highest score for current week
 		$highestScore = 0;
@@ -408,7 +409,7 @@ function getTeamRecord($teamID) {
 	} else {
 		return '';
 	}
-	$query->free;
+	$query->free_result();
 }
 
 function getTeamStreak($teamID) {
@@ -448,6 +449,9 @@ function getTeamStreak($teamID) {
 	} else {
 		return '';
 	}
-	$query->free;
+	$query->free_result();
 }
+
+define('DEBUG_MODE', true); // Set to true to enable debug mode, or false to disable it
+define('DEBUG_LOG', 'debug.log'); // Set the name of the debug log file
 

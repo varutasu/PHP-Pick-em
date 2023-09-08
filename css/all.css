@@ -785,6 +785,10 @@ h2.form-signin-heading {
     border-radius: 4px;
 }
 
+.winner label {
+    background: none;
+}
+
 div.fieldLoaded,
 input.fieldLoaded {
     background-color: #f0e0d0;

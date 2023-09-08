@@ -5,6 +5,10 @@ require('includes/classes/team.php');
 function sanitizeInput($input) {
     return htmlspecialchars(strip_tags(trim($input)), ENT_QUOTES, 'UTF-8');
 }
+// Enable error reporting for debugging
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 
 // Set default values for year and week if not provided in the URL
 if (empty($_GET['year'])) {
@@ -19,45 +23,77 @@ if (empty($_GET['week'])) {
     $week = (int)$_GET['week'];
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'Submit') {
-    $cutoffDateTime = getCutoffDateTime($week, $year);
+if (isset($_POST['action']) && $_POST['action'] == 'Submit') {
+    $week = $_POST['week'];
+    $cutoffDateTime = getCutoffDateTime($week);
+    $hasError = false; // Initialize the $hasError variable to false
 
-    // Sanitize user input and use prepared statements for database queries
+    // Debug Mode: Display SQL Queries
+    if (defined('DEBUG_MODE') && DEBUG_MODE) {
+        echo "Debug Mode: SQL Queries\n";
+    }
+
+    // Update summary table using prepared statements
     $stmt = $mysqli->prepare("DELETE FROM " . DB_PREFIX . "picksummary WHERE yearNum = ? AND weekNum = ? AND userID = ?");
-    $stmt->bind_param("iii", $year, $week, $user->userID);
-    $stmt->execute();
+    $stmt->bind_param("iii", $_POST['year'], $_POST['week'], $user->userID);
+    if (!$stmt->execute()) {
+        $hasError = true;
+        echo "Error updating picks summary: " . $stmt->error;
+    }
     $stmt->close();
 
-    $showPicks = isset($_POST['showPicks']) ? 1 : 0;
     $stmt = $mysqli->prepare("INSERT INTO " . DB_PREFIX . "picksummary (yearNum, weekNum, userID, showPicks) VALUES (?, ?, ?, ?)");
-    $stmt->bind_param("iiii", $year, $week, $user->userID, $showPicks);
-    $stmt->execute();
+    $showPicks = (int)$_POST['showPicks'];
+    $stmt->bind_param("iiii", $_POST['year'], $_POST['week'], $user->userID, $showPicks);
+    if (!$stmt->execute()) {
+        $hasError = true;
+        echo "Error updating picks summary: " . $stmt->error;
+    }
     $stmt->close();
 
+    // Loop through non-expired weeks and update picks
     $stmt = $mysqli->prepare("SELECT * FROM " . DB_PREFIX . "schedule WHERE yearNum = ? AND weekNum = ? AND (DATE_ADD(NOW(), INTERVAL ? HOUR) < gameTimeEastern AND DATE_ADD(NOW(), INTERVAL ? HOUR) < ?)");
-    $stmt->bind_param("iiiss", $year, $week, SERVER_TIMEZONE_OFFSET, SERVER_TIMEZONE_OFFSET, $cutoffDateTime);
+    $timezoneOffset = SERVER_TIMEZONE_OFFSET;
+    $stmt->bind_param("iiiss", $_POST['year'], $_POST['week'], $timezoneOffset, $timezoneOffset, $cutoffDateTime);
     $stmt->execute();
     $result = $stmt->get_result();
 
     if ($result->num_rows > 0) {
         while ($row = $result->fetch_assoc()) {
             $gameID = (int)$row['gameID'];
-            $userPick = isset($_POST['game' . $gameID]) ? (int)sanitizeInput($_POST['game' . $gameID]) : 0;
+            $userPick = !empty($_POST['game' . $gameID]) ? $_POST['game' . $gameID] : null;
+
+            // Debug Mode: Display SQL Queries
+            if (defined('DEBUG_MODE') && DEBUG_MODE) {
+                echo "Debug Mode: SQL Queries\n";
+            }
 
             // Use prepared statements for insert and delete queries
             $stmt = $mysqli->prepare("DELETE FROM " . DB_PREFIX . "picks WHERE userID = ? AND gameID = ?");
             $stmt->bind_param("ii", $user->userID, $gameID);
-            $stmt->execute();
+            if (!$stmt->execute()) {
+                $hasError = true;
+                echo "Error deleting picks: " . $stmt->error;
+            }
+            $stmt->close();
 
-            if ($userPick !== 0) {
+            if ($userPick !== null) {
                 $stmt = $mysqli->prepare("INSERT INTO " . DB_PREFIX . "picks (userID, gameID, pickID) VALUES (?, ?, ?)");
-                $stmt->bind_param("iii", $user->userID, $gameID, $userPick);
-                $stmt->execute();
+                $stmt->bind_param("iis", $user->userID, $gameID, $userPick);
+                if (!$stmt->execute()) {
+                    $hasError = true;
+                    echo "Error inserting picks: " . $stmt->error;
+                }
+                $stmt->close();
             }
         }
     }
     $result->free_result();
 
+    if (!$hasError) { // Check if any errors occurred
+        // Display a success message
+        $successMessage = "Your picks have been successfully submitted!";
+    }
 } else {
     // Redirect to the current page with default year and week if needed
     if (empty($_GET['year']) || empty($_GET['week'])) {
@@ -69,6 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $cutoffDateTime = getCutoffDateTime($week);
     $firstGameTime = getFirstGameTime($week);
 }
+
 
 include('includes/header.php');
 ?>
@@ -131,14 +168,14 @@ include('includes/header.php');
     <div class="col-xs-4 right">
         <?php
         // Display year nav
-        $sql = "SELECT DISTINCT year FROM " . DB_PREFIX . "schedule ORDER BY year;";
+        $sql = "SELECT DISTINCT yearNum FROM " . DB_PREFIX . "schedule ORDER BY yearNum;";
         if ($query = $mysqli->query($sql)) {
             $currentScript = $_SERVER['PHP_SELF']; // Get the current script name
             $yearNav = '<div class="btn-group"><button type="button" class="btn btn-outline dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">' . $year . ' <span class="caret"></span></button>';
             $yearNav .= '    <ul class="dropdown-menu"> ';
             $i = 0;
             while ($row = $query->fetch_assoc()) {
-                $yearNum = (int) $row['year']; // Assuming year is an integer
+                $yearNum = (int) $row['yearNum']; // Assuming year is an integer
                 $yearNav .= '<li><a href="' . $currentScript . '?year=' . $yearNum . '&week=' . $week . '">' . $yearNum . '</a></li>';
                 $i++;
             }
@@ -180,11 +217,13 @@ include('includes/header.php');
         <h2>Week <?php echo $week; ?> - Make Your Picks:</h2>
         <p>Please make your picks below for each game.</p>
         <?php
+
         // Get existing picks
 		$picks = getUserPicks($year, $week, $user->userID);
 
         // Get show picks status
-		$sql = "SELECT * FROM " . DB_PREFIX . "picksummary WHERE weekNum = " . $week . " AND year = " . $year . " AND userID = " . $user->userID . ";";
+		$sql = "SELECT * FROM " . DB_PREFIX . "picksummary WHERE yearNum = " . $year . " AND weekNum = " . $week . " AND userID = " . $user->userID . ";";
+
         $query = $mysqli->query($sql);
         if ($query->num_rows > 0) {
             $row = $query->fetch_assoc();
@@ -192,18 +231,19 @@ include('includes/header.php');
         } else {
             $showPicks = 1;
         }
-        $query->free;
+        $query->free_result();
 
         // Display schedule for the week
         $sql = "SELECT s.*, (DATE_ADD(NOW(), INTERVAL " . SERVER_TIMEZONE_OFFSET . " HOUR) > gameTimeEastern OR DATE_ADD(NOW(), INTERVAL " . SERVER_TIMEZONE_OFFSET . " HOUR) > '" . $cutoffDateTime . "')  AS expired ";
         $sql .= "FROM " . DB_PREFIX . "schedule s ";
         $sql .= "INNER JOIN " . DB_PREFIX . "teams ht ON s.homeID = ht.teamID ";
         $sql .= "INNER JOIN " . DB_PREFIX . "teams vt ON s.visitorID = vt.teamID ";
-        $sql .= "where s.yearNum = " . $year . " ";
+        $sql .= "WHERE s.yearNum = " . $year . " ";
+        $sql .= "AND s.weekNum = " . $week . " ";
         $sql .= "ORDER BY s.gameTimeEastern, s.gameID";
-        
-        $query = $mysqli->query($sql) or die($mysqli->error);
 
+        $query = $mysqli->query($sql) or die($mysqli->error);
+        
         if ($query->num_rows > 0) {
             echo '<form name="entryForm" action="entry_form.php" method="post" onsubmit="return checkform();">' . "\n";
 			echo '<input type="hidden" name="year" value="' . $year . '" />';
@@ -272,14 +312,14 @@ include('includes/header.php');
                             $homelabel = '';
                             $visitorlabel = '';
                         } else {
-                            $pickLabel = '';
+                            
                         }
                     }
                 }
                 
                 echo '                <div class="matchup">' . "\n";
                 echo '                    <div class="row versus">' . "\n";
-                echo '                        <div class="col-xs-4 ' . $visitorlabel . $pickLabel . '">' . "\n";
+                echo '                        <div class="col-xs-4 ' . $visitorlabel . '">' . "\n";
                 echo '                            <label for="' . $row['gameID'] . $visitorTeam->teamID . '" class="label-for-check"><div class="team-logo"><img src="images/logos/' . $visitorTeam->teamID . '.svg" onclick="document.entryForm.game' . $row['gameID'] . '[0].checked=true;" /></div>' . "\n";
                 echo '                            <div class="team-city">' . $visitorTeam->city . '</div>' . "\n";
                 echo '                            <div class="team-name">' . $visitorTeam->team . '</div>' . "\n";
@@ -287,7 +327,12 @@ include('includes/header.php');
                 echo '                        </div>' . "\n";
                 echo '                        <div class="col-xs-1 team-separator">' . "\n";
                 
-                if (!empty($homeScore) || !empty($visitorScore)) {
+                if (empty($homeScore) && empty($visitorScore)) {
+                    // Show time of the upcoming game
+                    echo '                    <div class="at-sign">@</div>' . "\n";
+                    echo '                    <div class="date">' . date('D n/j', strtotime($row['gameTimeEastern'])) . '</div>' . "\n";
+                    echo '                    <div class="time">' . date('g:i A', strtotime($row['gameTimeEastern'])) . ' ET</div>' . "\n";
+                } else {
                     //$winnerID will be null if it's a tie, which is ok
                     if ($scoreEntered) {
                         if ($row['final'] == 1) {
@@ -296,7 +341,7 @@ include('includes/header.php');
                             echo '                    <div class="score"><b>' . $row['visitorScore'] . ' - ' . $row['homeScore'] . '</b></div>' . "\n";
                         }
                     } else {
-                        // Else show time of game
+                        // Show time of the game
                         echo '                    <div class="at-sign">@</div>' . "\n";
                         echo '                    <div class="date">' . date('D n/j', strtotime($row['gameTimeEastern'])) . '</div>' . "\n";
                         echo '                    <div class="time">' . date('g:i A', strtotime($row['gameTimeEastern'])) . ' ET</div>' . "\n";
@@ -304,7 +349,7 @@ include('includes/header.php');
                 }
                 
                 echo '                        </div>' . "\n";
-                echo '                        <div class="col-xs-4 ' . $homelabel . $pickLabel . '">' . "\n";
+                echo '                        <div class="col-xs-4 ' . $homelabel . '">' . "\n";
                 echo '                            <label for="' . $row['gameID'] . $homeTeam->teamID . '" class="label-for-check"><div class="team-logo"><img src="images/logos/' . $homeTeam->teamID . '.svg" onclick="document.entryForm.game' . $row['gameID'] . '[1].checked=true;" /></div>' . "\n";
                 echo '                            <div class="team-city">' . $homeTeam->city . '</div>' . "\n";
                 echo '                            <div class="team-name">' . $homeTeam->team . '</div>' . "\n";
@@ -328,17 +373,20 @@ include('includes/header.php');
                 $i++;
             }
             echo '        </div>' . "\n";
-            echo '    </div>' . "\n";
-            
-            if (ALWAYS_HIDE_PICKS) {
-                echo '<p class="noprint"><input type="hidden" name="showPicks" id="showPicks" value="0"' . (($showPicks) ? ' checked="checked"' : '') . ' /> <label for="showPicks">' . "\n";
-            } else {
-                echo '<p class="noprint"><input type="checkbox" name="showPicks" id="showPicks" value="1"' . (($showPicks) ? ' checked="checked"' : '') . ' /> <label for="showPicks">Allow others to see my picks</label></p>' . "\n";
-            }
-            
+            echo '    </div>' . "\n";            
             echo '<p class="noprint"><input class="fab" type="submit" name="action" value="Submit" /></p>' . "\n";
             echo '</form>' . "\n";
-        }
+            
+            // After the HTML form and other content, check if the $successMessage is set
+            if (isset($successMessage)) {
+                echo '<div class="success-message">' . $successMessage . '</div>';
+                // You can style the success message using CSS as needed
+                // Optionally, you can add a link to redirect to "results.php" after displaying the message
+                echo '<p><a href="results.php">Go to Results Page</a></p>';
+            }
+            } else {
+                echo '<p>There are no games scheduled for this week.</p>' . "\n";
+            }
 
         echo '    </div>' . "\n"; // end col
         echo '    </div>' . "\n"; // end entry-form row
@@ -347,3 +395,5 @@ include('includes/header.php');
         include('includes/comments.php');
         //echo '</div>';
         ?>
+    </div>
+</div>

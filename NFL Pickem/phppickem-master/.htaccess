@@ -1,0 +1,36 @@
+RewriteEngine On
+RewriteBase /personal/applications/phppickem/
+
+# 301 REDIRECTS
+# redirect 301 /links.php http://www.domain.com/api-companies.php
+# RewriteRule ^links.php$ api-companies.php [L,R=301]
+
+# rewrite all index files to folder root
+#RewriteCond %{THE_REQUEST} /index\.html [NC]
+#RewriteRule ^(.*/)?index\.html$ $1 [R=301,L]
+#RewriteCond %{THE_REQUEST} /index\.php [NC]
+#RewriteRule ^(.*/)?index\.php$ $1 [R=301,L]
+
+# strip php file extensions
+# RewriteRule ^admin - [L,NC]
+# RewriteRule ^os2 - [L,NC]
+# RewriteCond %{THE_REQUEST} ^[A-Z]{3,9}\ /([^.]+\.)+php?\ HTTP
+# RewriteRule ^(.*)\.php$ $1 [R=301,L]
+
+# redirect all traffic to the www domain (if applicable)
+# RewriteCond %{HTTP_HOST} !^www\.
+# RewriteRule ^(.*)$ http://www.%{HTTP_HOST}/$1 [R=301,L]
+# redirect all traffic to the primary domain (if applicable)
+# RewriteCond %{HTTP_HOST} !^www\.domain\.com
+# RewriteRule ^(.*)$ http://www\.domain\.com/$1 [R=301,L]
+
+# display php files without file extensions
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}\.php -f
+RewriteRule ^(.*)$ $1.php
+
+# ERROR DOCUMENTS
+# ErrorDocument 404 /404.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ 404.php [L]

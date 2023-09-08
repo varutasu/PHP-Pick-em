@@ -280,6 +280,7 @@ include('includes/column_right.php');
 		}
 		echo '<p class="noprint"><input type="submit" name="action" value="Submit" /></p>' . "\n";
 		echo '</form>' . "\n";
+		
 	}
 
 echo '	</div>'."\n"; // end col

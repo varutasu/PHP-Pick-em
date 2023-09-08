@@ -20,47 +20,6 @@ if (empty($_GET['week'])) {
 } else {
     $week = (int)$_GET['week'];
 }
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'Submit') {
-    $cutoffDateTime = getCutoffDateTime($week, $year);
-
-    // Sanitize user input and use prepared statements for database queries
-    $stmt = $mysqli->prepare("DELETE FROM " . DB_PREFIX . "picksummary WHERE yearNum = ? AND weekNum = ? AND userID = ?");
-    $stmt->bind_param("iii", $year, $week, $user->userID);
-    $stmt->execute();
-    $stmt->close();
-
-    $showPicks = isset($_POST['showPicks']) ? 1 : 0;
-    $stmt = $mysqli->prepare("INSERT INTO " . DB_PREFIX . "picksummary (yearNum, weekNum, userID, showPicks) VALUES (?, ?, ?, ?)");
-    $stmt->bind_param("iiii", $year, $week, $user->userID, $showPicks);
-    $stmt->execute();
-    $stmt->close();
-
-    $stmt = $mysqli->prepare("SELECT * FROM " . DB_PREFIX . "schedule WHERE yearNum = ? AND weekNum = ? AND (DATE_ADD(NOW(), INTERVAL ? HOUR) < gameTimeEastern AND DATE_ADD(NOW(), INTERVAL ? HOUR) < ?)");
-    $stmt->bind_param("iiiss", $year, $week, SERVER_TIMEZONE_OFFSET, SERVER_TIMEZONE_OFFSET, $cutoffDateTime);
-    $stmt->execute();
-    $result = $stmt->get_result();
-
-    if ($result->num_rows > 0) {
-        while ($row = $result->fetch_assoc()) {
-            $gameID = (int)$row['gameID'];
-            $userPick = isset($_POST['game' . $gameID]) ? (int)sanitizeInput($_POST['game' . $gameID]) : 0;
-
-            // Use prepared statements for insert and delete queries
-            $stmt = $mysqli->prepare("DELETE FROM " . DB_PREFIX . "picks WHERE userID = ? AND gameID = ?");
-            $stmt->bind_param("ii", $user->userID, $gameID);
-            $stmt->execute();
-
-            if ($userPick !== 0) {
-                $stmt = $mysqli->prepare("INSERT INTO " . DB_PREFIX . "picks (userID, gameID, pickID) VALUES (?, ?, ?)");
-                $stmt->bind_param("iii", $user->userID, $gameID, $userPick);
-                $stmt->execute();
-            }
-        }
-    }
-    $result->free_result();
-
-} else {
     // Redirect to the current page with default year and week if needed
     if (empty($_GET['year']) || empty($_GET['week'])) {
         $currentScript = $_SERVER['PHP_SELF']; // Get the current script name
@@ -70,14 +29,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     $cutoffDateTime = getCutoffDateTime($week);
     $firstGameTime = getFirstGameTime($week);
-}
 
 include('includes/header.php');
 ?>
 
 <div class="row flex">
     <div id="page-title" class="col-xs-8 left">
-        <i class="bi bi-calendar-check-fill"></i><h1 class="display-1 title">Picks</h1>
+        <i class="bi bi-calendar-check-fill"></i><h1 class="display-1 title">Results</h1>
     </div>
     <div class="col-xs-4 right">
         <?php
