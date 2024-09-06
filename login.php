@@ -45,7 +45,7 @@ if(empty($_SESSION['logged']) || $_SESSION['logged'] !== 'yes') {
 	<div class="container">
 		<form class="form-signin" role="form" action="login.php" method="POST">
 		<div class="logo"><img src="../images/app_logo.png"></div>	
-		<h2 class="form-signin-heading">Sign in to make your picks</h2>
+		<h2 class="form-signin-heading">Log in to make your picks</h2>
 			<?php
 			//print_r($_POST);
 			if ($_GET['login'] == 'failed') {
@@ -56,8 +56,8 @@ if(empty($_SESSION['logged']) || $_SESSION['logged'] !== 'yes') {
 			?>
 			<p><input type="text" name="username" class="form-control" placeholder="Username" required autofocus />
 			<input type="password" name="password" class="form-control" placeholder="Password" required /></p>
-			<!--label class="checkbox"><input type="checkbox" value="remember-me"> Remember me</label-->
-			<button class="btn btn-lg btn-primary btn-block" type="submit">Sign in</button>
+			<label class="checkbox"><input type="checkbox" value="remember-me"> Remember me</label>
+			<button class="btn btn-lg btn-primary btn-block" type="submit">Log in</button>
 			<?php
 			if (ALLOW_SIGNUP && SHOW_SIGNUP_LINK) {
 				echo '<button class="btn btn-outline btn-lg btn-block"><a href="signup.php">Create Account</a></button>';
