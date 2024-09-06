@@ -6,7 +6,7 @@ require 'vendor/autoload.php';
 use Symfony\Component\DomCrawler\Crawler;
 
 // Get the URL
-$url = 'https://www.pro-football-reference.com/years/2023/games.htm#games';
+$url = 'https://www.pro-football-reference.com/years/2024/games.htm#games';
 
 // Create a Crawler object
 $crawler = new Crawler();
